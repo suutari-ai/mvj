@@ -1,4 +1,5 @@
 beautifulsoup4
+dataclasses ; python_version<"3.7"
 Django
 #django-auditlog
 # Django auditlog uses django-jsonfield which clashes with the native JSONField.
