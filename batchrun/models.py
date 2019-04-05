@@ -4,7 +4,7 @@ from django.utils.translation import ugettext_lazy as _
 from enumfields import EnumField
 
 from .enums import EventLogKind
-from .fields import NullableIntegerSetSpecifierField
+from .fields import IntegerSetSpecifierField
 
 
 class Command(models.Model):
@@ -54,22 +54,22 @@ class ScheduledJob(models.Model):
     enabled = models.BooleanField(default=True, verbose_name=_('enabled'))
 
     timezone = models.CharField(max_length=100)  # e.g. Europe/Helsinki
-    years = NullableIntegerSetSpecifierField(
-        value_range=(1970, 3000), verbose_name=_('years'))
-    months = NullableIntegerSetSpecifierField(
+    years = IntegerSetSpecifierField(
+        value_range=(1970, 2200), verbose_name=_('years'))
+    months = IntegerSetSpecifierField(
         value_range=(1, 12), verbose_name=_('months'))
-    days_of_month = NullableIntegerSetSpecifierField(
+    days_of_month = IntegerSetSpecifierField(
         value_range=(1, 31), verbose_name=_('days of month'))
-    weekdays = NullableIntegerSetSpecifierField(
+    weekdays = IntegerSetSpecifierField(
         value_range=(0, 6), verbose_name=_('weekdays'), help_text=_(
             'Limit execution to specified weekdays. '
             'The weekdays are mapped to integer values so that '
             '0=Sunday, 1=Monday, 2=Tuesday, ..., 6=Saturday.'))
-    hours = NullableIntegerSetSpecifierField(
+    hours = IntegerSetSpecifierField(
         value_range=(0, 23), verbose_name=_('hours'))
-    minutes = NullableIntegerSetSpecifierField(
+    minutes = IntegerSetSpecifierField(
         value_range=(0, 59), verbose_name=_('minutes'))
-    #seconds = NullableIntegerSetSpecifierField( # TODO: Probably too much precision for us?
+    #seconds = IntegerSetSpecifierField( # TODO: Probably too much precision for us?
     #    value_range=(0, 59), verbose_name=_('Seconds'))
 
     #next_run_at = models.DateTimeField( #TODO: Is this field needed?
