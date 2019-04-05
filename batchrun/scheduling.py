@@ -48,19 +48,6 @@ class RecurrenceRule:
             dst_non_existent_as=dst_non_existent_as,
         )
 
-    #TODO: Is matches or matches_naive needed?
-    # def matches(self, dt: datetime) -> bool:
-    #     return self.matches_naive(dt.astimezone(pytz.timezone(self.timezone)))
-
-    # def matches_naive(self, dt: datetime) -> bool:
-    #     return (
-    #         dt.year in self.years and
-    #         dt.month in self.months and
-    #         dt.day in self.days_of_month and
-    #         _get_weekday(dt) in self.weekdays and
-    #         dt.hour in self.hours and
-    #         dt.minute in self.minutes)
-
 
 def get_next_events(
         rule: RecurrenceRule,
