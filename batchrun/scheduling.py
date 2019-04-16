@@ -1,26 +1,22 @@
 from dataclasses import dataclass
-from datetime import date, datetime, time
-from typing import Iterable, Union
+from datetime import date, datetime, time, tzinfo
+from typing import Iterable, Set, Union
 
 import pytz
 
-from .enums import DstHandling
+from ._times import check_is_aware, make_aware, AwareDateTime
 from .intset import IntegerSetSpecifier
 
 
 @dataclass
 class RecurrenceRule:
-    timezone: str
-
+    timezone: tzinfo
     years: IntegerSetSpecifier
     months: IntegerSetSpecifier
     days_of_month: IntegerSetSpecifier
     weekdays: IntegerSetSpecifier
     hours: IntegerSetSpecifier
     minutes: IntegerSetSpecifier
-
-    dst_ambiguous_as: DstHandling
-    dst_non_existent_as: DstHandling
 
     @classmethod
     def create(
@@ -33,49 +29,63 @@ class RecurrenceRule:
             weekdays: str = '*',
             hours: str = '*',
             minutes: str = '*',
-            dst_ambiguous_as: DstHandling = DstHandling.DST_OFF,
-            dst_non_existent_as: DstHandling = DstHandling.SKIP,
     ) -> 'RecurrenceRule':
         return cls(
-            timezone=timezone,
+            timezone=pytz.timezone(timezone),
             years=IntegerSetSpecifier(years, 1970, 2200),
             months=IntegerSetSpecifier(months, 1, 12),
             days_of_month=IntegerSetSpecifier(days_of_month, 1, 31),
             weekdays=IntegerSetSpecifier(weekdays, 0, 6),
             hours=IntegerSetSpecifier(hours, 0, 23),
             minutes=IntegerSetSpecifier(minutes, 0, 59),
-            dst_ambiguous_as=dst_ambiguous_as,
-            dst_non_existent_as=dst_non_existent_as,
         )
+
+    def matches_datetime(self, dt: datetime) -> bool:
+        return (self.matches_date(dt) and self.matches_time(dt.time()))
+
+    def matches_date(self, d: date) -> bool:
+        return (
+            d.year in self.years and
+            d.month in self.months and
+            d.day in self.days_of_month and
+            self.matches_weekday(d))
+
+    def matches_weekday(self, dt: Union[date, datetime]) -> bool:
+        if self.weekdays.is_total():
+            return True
+        python_weekday = dt.weekday()  # Monday = 0, Sunday = 6
+        weekday = (python_weekday + 1) % 7  # Monday = 1, Sunday = 0
+        return (weekday in self.weekdays)
+
+    def matches_time(self, t: time) -> bool:
+        return (t.hour in self.hours and t.minute in self.minutes)
 
 
 def get_next_events(
         rule: RecurrenceRule,
         start_time: datetime,
-) -> Iterable[datetime]:
-    if not start_time.tzinfo:
-        raise ValueError('start_time must have a timezone')
+) -> Iterable[AwareDateTime]:
+    check_is_aware(start_time)
 
-    tz = pytz.timezone(rule.timezone)
-    localized_start_time = start_time.astimezone(tz)
+    tz = rule.timezone
+    last_timestamps: Set[AwareDateTime] = set()
 
-    for d in _iter_dates_from(rule, localized_start_time.date()):
+    for d in _iter_dates_from(rule, start_time.astimezone(tz).date()):
+        timestamps: Set[AwareDateTime] = set()
         for t in _iter_times(rule):
-            naive_dt = datetime.combine(d, t)
-            try:
-                dt = tz.localize(naive_dt, is_dst=None)  # type: ignore
-            except pytz.AmbiguousTimeError:
-                if rule.dst_ambiguous_as == DstHandling.SKIP:
-                    continue
-                dt = tz.localize(naive_dt, is_dst=(
-                    rule.dst_ambiguous_as == DstHandling.DST_ON))
-            except pytz.NonExistentTimeError:
-                if rule.dst_non_existent_as == DstHandling.SKIP:
-                    continue
-                dt = tz.localize(naive_dt, is_dst=(
-                    rule.dst_non_existent_as == DstHandling.DST_ON))
-            if dt >= start_time:
-                yield dt
+            dt = datetime.combine(d, t)
+            for timestamp in _get_possible_times(rule, dt, tz):
+                if timestamp >= start_time:
+                    timestamps.add(timestamp)
+
+        # There might be entries in the timestamps set which were
+        # already in the previous day's set, if DST change happens on
+        # midnight, so remove those.
+        timestamps -= last_timestamps
+
+        yield from sorted(timestamps)
+
+        last_timestamps = timestamps
 
 
 def _iter_dates_from(rule: RecurrenceRule, start_date: date) -> Iterable[date]:
@@ -93,13 +103,8 @@ def _iter_dates_from(rule: RecurrenceRule, start_date: date) -> Iterable[date]:
                 except ValueError:  # day out of range for month
                     continue  # Skip non-existing dates
 
-                if d < start_date:
-                    continue
-
-                if _get_weekday(d) not in rule.weekdays:
-                    continue
-
-                yield d
+                if d >= start_date and rule.matches_weekday(d):
+                    yield d
 
 
 def _iter_times(rule: RecurrenceRule) -> Iterable[time]:
@@ -108,6 +113,18 @@ def _iter_times(rule: RecurrenceRule) -> Iterable[time]:
             yield time(hour, minute)
 
 
-def _get_weekday(date_or_datetime: Union[date, datetime]) -> int:
-    python_weekday = date_or_datetime.weekday()  # Monday = 0, Sunday = 6
-    return (python_weekday + 1) % 7  # Monday = 1, Sunday = 0
+def _get_possible_times(
+        rule: RecurrenceRule,
+        naive_datetime: datetime,
+        tz: tzinfo,
+) -> Iterable[AwareDateTime]:
+    try:
+        return [make_aware(naive_datetime, tz)]
+    except pytz.AmbiguousTimeError:
+        dsts = ([True, False] if len(rule.hours) > 1 else [True])
+        timestamps = (
+            make_aware(naive_datetime, tz, is_dst=dst)
+            for dst in dsts)
+        return [x for x in timestamps if rule.matches_datetime(x)]
+    except pytz.NonExistentTimeError:
+        return [make_aware(naive_datetime, tz, is_dst=True)]
