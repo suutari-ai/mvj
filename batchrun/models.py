@@ -76,7 +76,7 @@ class ScheduledJob(models.Model):
     #    null=True, blank=True, db_index=True)
 
 
-class JobEvent(models.Model):
+class JobRun(models.Model):
     """
     Instance of a job currently running or ran in the past.
     """
@@ -86,10 +86,10 @@ class JobEvent(models.Model):
     exit_code = models.IntegerField(null=True)
 
 
-class JobEventLogEntry(models.Model):
+class JobRunLogEntry(models.Model):
     """
     """
-    event = models.ForeignKey(JobEvent, on_delete=models.PROTECT)
+    run = models.ForeignKey(JobRun, on_delete=models.PROTECT)
     time = models.DateTimeField()
     kind = EnumField(EventLogKind, max_length=30)
     text = models.TextField()
