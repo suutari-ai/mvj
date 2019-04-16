@@ -42,22 +42,3 @@ class IntegerSetSpecifierField(models.CharField):
 
     def get_prep_value(self, value):
         return value.spec
-
-
-class NullableIntegerSetSpecifierField(IntegerSetSpecifierField):#TODO: Is this class even needed=
-
-    def __init__(
-            self,
-            *,
-            value_range: Tuple[int, int],
-            **kwargs: object,
-    ) -> None:
-        kwargs['null'] = True
-        kwargs['blank'] = True
-        super().__init__(value_range=value_range, **kwargs)
-
-    def deconstruct(self):
-        (name, path, args, kwargs) = super().deconstruct()
-        kwargs.pop('null', None)
-        kwargs.pop('blank', None)
-        return (name, path, args, kwargs)
