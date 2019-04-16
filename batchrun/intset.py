@@ -111,16 +111,17 @@ class IntegerSetSpecifier:
 
         parsed_ranges = _parse_spec_as_ranges(spec, min_value, max_value)
         self._ranges: List[range] = _combine_ranges(parsed_ranges)
+        self._separated: bool = _range_limits_are_separate(self._ranges)
+        self._total_range: range = range(min_value, max_value + 1)
 
     def is_total(self) -> bool:
-        total_range = range(self.min_value, self.max_value + 1)
-        if self.spec == '*' or self._ranges == [total_range]:
+        if self.spec == '*' or self._ranges == [self._total_range]:
             return True
-        elif _range_limits_are_separate(self._ranges):
+        elif self._separated:
             # There must be holes between the ranges, because otherwise
             # _combine_ranges would have combined all ranges to one.
             return False
-        return all((x in self) for x in total_range)
+        return all((x in self) for x in self._total_range)
 
     def simplify(self) -> 'IntegerSetSpecifier':
         def _format_range(rng: range) -> str:
@@ -129,16 +130,13 @@ class IntegerSetSpecifier:
                 '{}-{}{}'.format(
                     rng.start, rng.stop - 1,
                     '/{}'.format(rng.step) if rng.step != 1 else ''))
-        contains_all = (
-            self.spec == '*' or
-            self._ranges == [range(self.min_value, self.max_value + 1)])
         simplified_spec = (
-            '*' if contains_all else
+            '*' if self.is_total() else
             ','.join(_format_range(x) for x in self._ranges))
         return type(self)(simplified_spec, self.min_value, self.max_value)
 
     def __iter__(self) -> Iterator[int]:
-        if _range_limits_are_separate(self._ranges):
+        if self._separated:
             return iter(chain(*self._ranges))
         return self._iter_by_contains()
 
@@ -150,7 +148,7 @@ class IntegerSetSpecifier:
                 yield value
 
     def __len__(self) -> int:
-        if _range_limits_are_separate(self._ranges):
+        if self._separated:
             return sum(len(x) for x in self._ranges)
         return sum(1 for _ in self)
 
