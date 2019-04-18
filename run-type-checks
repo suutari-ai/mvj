@@ -1,0 +1,2 @@
+#!/bin/sh
+MYPYPATH=batchrun/stubs mypy --strict batchrun/
