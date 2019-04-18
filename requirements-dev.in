@@ -2,6 +2,7 @@
 django-debug-toolbar
 django-extensions
 django-stubs
+djangorestframework-stubs
 flake8
 flake8-print
 ipython
