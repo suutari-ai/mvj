@@ -134,9 +134,6 @@ class ScheduledJob(TimeStampedSafeDeleteModel):
     minutes = IntegerSetSpecifierField(
         value_range=(0, 59), verbose_name=_('minutes'))
 
-    #next_run_at = models.DateTimeField( #TODO: Is this field needed?
-    #    null=True, blank=True, db_index=True)
-
     class Meta:
         verbose_name = _('scheduled job')
         verbose_name_plural = _('scheduled jobs')
@@ -162,7 +159,7 @@ class JobRun(models.Model):
     job = models.ForeignKey(
         Job, on_delete=models.PROTECT, verbose_name=_('job'))
     started_at = models.DateTimeField(
-        db_index=True, verbose_name=_('start time'))
+        auto_now_add=True, db_index=True, verbose_name=_('start time'))
     stopped_at = models.DateTimeField(
         null=True, blank=True, verbose_name=_('stop time'))
     exit_code = models.IntegerField(
@@ -201,3 +198,16 @@ class JobRunLogEntry(models.Model):
     def __str__(self) -> str:
         return ugettext('{run_name}: Log entry {number}').format(
             run_name=self.run, number=self.number)
+
+
+class JobRunQueueItem(models.Model):
+    run_at = models.DateTimeField(
+        db_index=True, verbose_name=_('scheduled run time'))
+    scheduled_job = models.ForeignKey(
+        ScheduledJob, on_delete=models.CASCADE,
+        verbose_name=_('scheduled job'))
+
+    assigned_at = models.DateTimeField(
+        null=True, blank=True, verbose_name=_('assignment time'))
+    assignee_pid = models.IntegerField(
+        null=True, blank=True, verbose_name=_('assignee process id (PID)'))
