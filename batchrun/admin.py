@@ -46,8 +46,20 @@ class JobAdmin(admin.ModelAdmin):
 @admin.register(JobRun)
 class JobRunAdmin(ReadOnlyAdmin):
     date_hierarchy = 'started_at'
-    list_display = ['started_at', 'stopped_at', 'job', 'exit_code']
+    list_display = [
+        'precise_started_at', 'precise_stopped_at',
+        'job', 'exit_code']
     list_filter = ['exit_code']
+
+    def precise_started_at(self, obj: Model) -> str:
+        return obj.started_at.strftime('%Y-%m-%d %H:%M:%S.%f')  # type: ignore
+    precise_started_at.short_description = _('start time')  # type: ignore
+    precise_started_at.admin_order_field = 'started_at'  # type: ignore
+
+    def precise_stopped_at(self, obj: Model) -> str:
+        return obj.stopped_at.strftime('%Y-%m-%d %H:%M:%S.%f')  # type: ignore
+    precise_stopped_at.short_description = _('start time')  # type: ignore
+    precise_stopped_at.admin_order_field = 'stopped_at'  # type: ignore
 
 
 @admin.register(JobRunLogEntry)
@@ -60,6 +72,7 @@ class JobRunLogEntryAdmin(ReadOnlyAdmin):
     def precise_time(self, obj: Model) -> str:
         return obj.time.strftime('%Y-%m-%d %H:%M:%S.%f')  # type: ignore
     precise_time.short_description = _('time')  # type: ignore
+    precise_time.admin_order_field = 'time'  # type: ignore
 
 
 @admin.register(JobRunQueueItem)
