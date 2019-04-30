@@ -1,6 +1,7 @@
 import os
 import shlex
 import sys
+from datetime import timedelta
 from typing import Any, Dict, List
 
 import pytz
@@ -11,9 +12,11 @@ from django.db import models
 from django.utils.translation import ugettext, ugettext_lazy as _
 from enumfields import EnumField
 
+from ._times import utc_now
 from .enums import CommandType, LogEntryKind
 from .fields import IntegerSetSpecifierField
 from .model_mixins import CleansOnSave, TimeStampedSafeDeleteModel
+from .scheduling import RecurrenceRule, get_next_events
 
 
 class Command(models.Model):
@@ -193,6 +196,32 @@ class ScheduledJob(TimeStampedSafeDeleteModel):
         return ugettext('Scheduled job "{job}" @ {schedule}').format(
             job=self.job, schedule=' '.join(schedule_items))
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        super().save(*args, **kwargs)
+        self.update_run_queue()
+
+    def update_run_queue(self, span: timedelta = timedelta(days=31)) -> None:
+        limit = utc_now() + span
+        recurrence_rule = RecurrenceRule.create(
+            timezone=self.timezone.name,
+            years=self.years,
+            months=self.months,
+            days_of_month=self.days_of_month,
+            weekdays=self.weekdays,
+            hours=self.hours,
+            minutes=self.minutes)
+
+        items: models.Manager = self.run_queue_items  # type: ignore
+
+        # Delete old items
+        items.all().delete()
+
+        # Create new items till the time limit
+        for time in get_next_events(recurrence_rule, utc_now()):
+            items.create(run_at=time, scheduled_job=self)
+            if time > limit:
+                break
+
 
 class JobRun(models.Model):
     """
@@ -216,7 +245,7 @@ class JobRun(models.Model):
         verbose_name_plural = _('job runs')
 
     def __str__(self) -> str:
-        return f'{self.job} ({self.started_at})'
+        return f'{self.job} [{self.pid}] ({self.started_at:%Y-%m-%dT%H:%M})'
 
 
 class JobRunLogEntry(models.Model):
@@ -254,9 +283,15 @@ class JobRunQueueItem(models.Model):
         db_index=True, verbose_name=_('scheduled run time'))
     scheduled_job = models.ForeignKey(
         ScheduledJob, on_delete=models.CASCADE,
-        verbose_name=_('scheduled job'))
+        related_name='run_queue_items', verbose_name=_('scheduled job'))
 
     assigned_at = models.DateTimeField(
         null=True, blank=True, verbose_name=_('assignment time'))
     assignee_pid = models.IntegerField(
         null=True, blank=True, verbose_name=_('assignee process id (PID)'))
+
+    class Meta:
+        ordering = ['run_at']
+
+    def __str__(self) -> str:
+        return f'{self.run_at}: {self.scheduled_job}'
