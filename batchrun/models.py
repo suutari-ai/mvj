@@ -216,11 +216,12 @@ class ScheduledJob(TimeStampedSafeDeleteModel):
         # Delete old items
         items.all().delete()
 
-        # Create new items till the time limit
-        for time in get_next_events(recurrence_rule, utc_now()):
-            items.create(run_at=time, scheduled_job=self)
-            if time > limit:
-                break
+        if self.enabled:
+            # Create new items till the time limit
+            for time in get_next_events(recurrence_rule, utc_now()):
+                items.create(run_at=time, scheduled_job=self)
+                if time > limit:
+                    break
 
 
 class JobRun(models.Model):

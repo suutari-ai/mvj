@@ -15,6 +15,7 @@ SKIP_PAST_ITEMS_OLDER_THAN = timedelta(minutes=5)
 
 def run_scheduler_loop() -> NoReturn:
     queue_items = JobRunQueueItem.objects.filter(
+        scheduled_job__enabled=True,
         assigned_at=None).order_by('run_at')
 
     while True:
