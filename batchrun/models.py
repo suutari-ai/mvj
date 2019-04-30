@@ -1,11 +1,17 @@
+import os
+import shlex
+import sys
+from typing import Any, Dict, List
+
 import pytz
+from django.conf import settings
 from django.contrib.postgres.fields import JSONField
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models
 from django.utils.translation import ugettext, ugettext_lazy as _
 from enumfields import EnumField
 
-from .enums import CommandType, EventLogKind
+from .enums import CommandType, LogEntryKind
 from .fields import IntegerSetSpecifierField
 from .model_mixins import CleansOnSave, TimeStampedSafeDeleteModel
 
@@ -49,6 +55,39 @@ class Command(models.Model):
             space=' ' if self.parameter_format_string else '',
             params=self.parameter_format_string)
 
+    def get_command_line(self, arguments: Dict[str, Any]) -> List[str]:
+        if self.type == CommandType.EXECUTABLE:
+            base_command = [self.name]
+        elif self.type == CommandType.DJANGO_MANAGE:
+            base_command = [sys.executable, get_django_manage_py(), self.name]
+        else:
+            raise ValueError('Unknown command type: {}'.format(self.type))
+        formatted_args = [
+            param_template.format(arguments)
+            for param_template in shlex.split(self.parameter_format_string)
+        ]
+        return base_command + formatted_args
+
+
+def get_django_manage_py(max_depth: int = 3) -> str:
+    manage_py_path = getattr(settings, 'MANAGE_PY_PATH', None)
+    if manage_py_path:
+        if not isinstance(manage_py_path, str):
+            raise ImproperlyConfigured('MANAGE_PY_PATH should be a string')
+        return manage_py_path
+
+    # Try to auto detect by searching down from dir containing settings
+    settings_mod = sys.modules[settings.SETTINGS_MODULE]  # type: ignore
+    directory = os.path.dirname(settings_mod.__file__)
+    tries_left = max_depth
+    while directory != '/' and tries_left:
+        candidate = os.path.join(directory, 'manage.py')
+        if os.path.exists(candidate):
+            return candidate
+        tries_left -= 1
+        directory = os.path.dirname(directory)
+    raise EnvironmentError('Cannot find manage.py')
+
 
 class Job(TimeStampedSafeDeleteModel):
     """
@@ -76,6 +115,9 @@ class Job(TimeStampedSafeDeleteModel):
 
     def __str__(self) -> str:
         return self.name
+
+    def get_command_line(self) -> List[str]:
+        return self.command.get_command_line(self.arguments)
 
 
 class Timezone(CleansOnSave, models.Model):
@@ -158,6 +200,10 @@ class JobRun(models.Model):
     """
     job = models.ForeignKey(
         Job, on_delete=models.PROTECT, verbose_name=_('job'))
+    pid = models.IntegerField(
+        null=True, blank=True, verbose_name=_('PID'), help_text=_(
+            'Records the process id of the process, '
+            'which is/was executing this job'))
     started_at = models.DateTimeField(
         auto_now_add=True, db_index=True, verbose_name=_('start time'))
     stopped_at = models.DateTimeField(
@@ -184,20 +230,23 @@ class JobRunLogEntry(models.Model):
     Additionally a creation timestamp is recorded to the "time" field.
     """
     run = models.ForeignKey(
-        JobRun, on_delete=models.PROTECT, verbose_name=_('run'))
-    number = models.IntegerField(verbose_name=_('number'))
-    time = models.DateTimeField(auto_now_add=True, verbose_name=_('time'))
-    kind = EnumField(EventLogKind, max_length=30, verbose_name=_('kind'))
+        JobRun, on_delete=models.PROTECT, related_name='log_entries',
+        verbose_name=_('run'))
+    kind = EnumField(LogEntryKind, max_length=30, verbose_name=_('kind'))
+    line_number = models.IntegerField(verbose_name=_('line number'))
+    number = models.IntegerField(verbose_name=_('number'))  # within line
+    time = models.DateTimeField(
+        auto_now_add=True, db_index=True, verbose_name=_('time'))
     text = models.TextField(null=False, blank=True, verbose_name=_('text'))
 
     class Meta:
-        ordering = ['run__started_at', 'run', 'number']
+        ordering = ['run__started_at', 'run', 'time']
         verbose_name = _('log entry of a job run')
         verbose_name_plural = _('log entries of job runs')
 
     def __str__(self) -> str:
-        return ugettext('{run_name}: Log entry {number}').format(
-            run_name=self.run, number=self.number)
+        return ugettext('{run_name}: {kind} entry {number}').format(
+            run_name=self.run, kind=self.kind, number=self.number)
 
 
 class JobRunQueueItem(models.Model):

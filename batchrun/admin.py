@@ -51,7 +51,7 @@ class JobRunAdmin(ReadOnlyAdmin):
 @admin.register(JobRunLogEntry)
 class JobRunLogEntryAdmin(ReadOnlyAdmin):
     date_hierarchy = 'time'
-    list_display = ['time', 'run', 'number', 'kind', 'text']
+    list_display = ['time', 'run', 'kind', 'line_number', 'number', 'text']
     list_filter = ['kind']
 
 

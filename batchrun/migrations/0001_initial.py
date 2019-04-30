@@ -67,7 +67,7 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('number', models.IntegerField(verbose_name='number')),
                 ('time', models.DateTimeField(auto_now_add=True, verbose_name='time')),
-                ('kind', enumfields.fields.EnumField(enum=batchrun.enums.EventLogKind, max_length=30, verbose_name='kind')),
+                ('kind', enumfields.fields.EnumField(enum=batchrun.enums.LogEntryKind, max_length=30, verbose_name='kind')),
                 ('text', models.TextField(blank=True, verbose_name='text')),
                 ('run', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='batchrun.JobRun', verbose_name='run')),
             ],

@@ -11,7 +11,7 @@ class CommandType(Enum):
         DJANGO_MANAGE = _('Django management command')
 
 
-class EventLogKind(Enum):
+class LogEntryKind(Enum):
     STDOUT = 'stdout'
     STDERR = 'stderr'
 
