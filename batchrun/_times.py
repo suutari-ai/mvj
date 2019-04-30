@@ -1,4 +1,5 @@
-from datetime import datetime, tzinfo
+import time
+from datetime import datetime, timezone, tzinfo
 from typing import Optional, NewType
 
 
@@ -18,3 +19,7 @@ def check_is_aware(dt: datetime) -> AwareDateTime:
     if not dt.tzinfo:
         raise ValueError('Given datetime is missing timezone information')
     return AwareDateTime(dt)
+
+
+def utc_now() -> AwareDateTime:
+    return datetime.fromtimestamp(time.time(), timezone.utc)  # type: ignore
