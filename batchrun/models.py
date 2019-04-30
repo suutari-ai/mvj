@@ -200,8 +200,9 @@ class ScheduledJob(TimeStampedSafeDeleteModel):
         super().save(*args, **kwargs)
         self.update_run_queue()
 
-    def update_run_queue(self, span: timedelta = timedelta(days=31)) -> None:
-        limit = utc_now() + span
+    def update_run_queue(self) -> None:
+        max_items_to_create = 60
+
         recurrence_rule = RecurrenceRule.create(
             timezone=self.timezone.name,
             years=self.years,
@@ -218,10 +219,11 @@ class ScheduledJob(TimeStampedSafeDeleteModel):
 
         if self.enabled:
             # Create new items till the time limit
-            for time in get_next_events(recurrence_rule, utc_now()):
-                items.create(run_at=time, scheduled_job=self)
-                if time > limit:
+            events = get_next_events(recurrence_rule, utc_now())
+            for (number, time) in enumerate(events):
+                if number >= max_items_to_create:
                     break
+                items.create(run_at=time, scheduled_job=self)
 
 
 class JobRun(models.Model):

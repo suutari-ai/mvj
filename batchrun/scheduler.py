@@ -54,4 +54,6 @@ def run_scheduler_loop() -> NoReturn:
             locked_item.assignee_pid = os.getpid()
             locked_item.save(update_fields=['assigned_at', 'assignee_pid'])
 
-        run_job(locked_item.scheduled_job.job)
+        run_job(first_item.scheduled_job.job)
+
+        first_item.scheduled_job.update_run_queue()
