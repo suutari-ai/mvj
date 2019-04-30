@@ -3,9 +3,11 @@ from typing import Optional
 from django.contrib import admin
 from django.db.models import Model
 from django.http import HttpRequest
+from django.utils.translation import ugettext_lazy as _
 
 from .models import (
-    Command, Job, JobRun, JobRunLogEntry, ScheduledJob, Timezone)
+    Command, Job, JobRun, JobRunLogEntry, JobRunQueueItem, ScheduledJob,
+    Timezone)
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
@@ -51,8 +53,19 @@ class JobRunAdmin(ReadOnlyAdmin):
 @admin.register(JobRunLogEntry)
 class JobRunLogEntryAdmin(ReadOnlyAdmin):
     date_hierarchy = 'time'
-    list_display = ['time', 'run', 'kind', 'line_number', 'number', 'text']
+    list_display = [
+        'precise_time', 'run', 'kind', 'line_number', 'number', 'text']
     list_filter = ['kind']
+
+    def precise_time(self, obj: Model) -> str:
+        return obj.time.strftime('%Y-%m-%d %H:%M:%S.%f')  # type: ignore
+    precise_time.short_description = _('time')  # type: ignore
+
+
+@admin.register(JobRunQueueItem)
+class JobRunQueueItemAdmin(ReadOnlyAdmin):
+    date_hierarchy = 'run_at'
+    list_display = ['run_at', 'scheduled_job', 'assigned_at', 'assignee_pid']
 
 
 @admin.register(ScheduledJob)
