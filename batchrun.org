@@ -1,5 +1,17 @@
 * MVJ eräajojärjestelmä
 
+** Tehtävät
+
+*** TODO Run jobs in own processes
+    - So that they don't die when scheduler dies
+*** TODO Make sure that only one runner can be started for a job
+*** TODO More tests
+*** TODO Updating of run queue
+    - Run update_run_queue for all ScheduledJob instances before starting the main loop
+*** TODO Squash migrations
+*** TODO Clean-up commits
+
+
 ** Vaatimukset
 
 - Käyttöliittymästä muokattavat ajojen aikataulut
@@ -46,7 +58,7 @@
   kesäaika/talviaika muutosten yhteydessä?
 
 
-  
+
 ** Toteutustavapojen vertailu
 
 Mahdollisia käytettäviä komponentteja
