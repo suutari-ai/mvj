@@ -1,0 +1,128 @@
+* MVJ eräajojärjestelmä
+
+** Tehtävät
+
+*** DONE Run jobs in own processes
+    - So that they don't die when scheduler dies
+*** DONE Squash migrations
+*** TODO Updating of run queue
+    - Run update_run_queue for all ScheduledJob instances before starting the main loop
+*** TODO Clean-up commits
+*** TODO Make sure that only one runner can be started for a job
+*** TODO More tests
+
+** Vaatimukset
+
+- Käyttöliittymästä muokattavat ajojen aikataulut
+  - HUOM: Aikavyöhykkeet
+
+- Logit ajetuista komennoista
+  - output selattavissa
+  - linkit vuokrauksiin ym.
+
+- Virheiden raportointi
+
+- Virheiden merkitseminen käsitellyiksi
+
+- Manuaalisesti komennon ajaminen
+
+- Manuaalisen ajon parametrisointi
+  - Esim. vain jokin tietty vuokraus
+
+- Yhtäaikaiset tai eriaikaiset ajot
+
+- Seuraavaksi ajettavien listaaminen (esim. viikko eteenpäin)
+
+- Voi olla yhtäaikaisia ajoja
+  - Nämä ajetaan kukin omassa prosessissaan
+
+- "Grace period" työkohtaisesti
+  - Kuinka paljon H-hetken jälkeen työ voidaan vielä ajaa
+
+
+** Kysymyksiä
+
+*** Määrittelykysymyksiä
+
+- Tarvitaanko seuraavia ominaisuuksia?
+  - Ajon keskeyttäminen
+  - Ajon pysäyttäminen ja jatkaminen (SIGSTOP, SIGCONT)
+  - Ajon keskeyttäminen eri tavoilla: SIGTERM vs SIGKILL
+
+*** Toteutuskysymyksiä
+
+- Mitä pitäisi tehdä jos kelloa siirretää eteenpäin tai taaksepäin?
+
+- Mitä pitäisi tehdä jos aikavyöhykettä muutetaan?  Entä
+  kesäaika/talviaika muutosten yhteydessä?
+
+
+
+** Toteutustavapojen vertailu
+
+Mahdollisia käytettäviä komponentteja
+
+ * (1) Django-modelit ja DRF API
+   * (+) Töiden ja ajoitusten hallinta API:n kautta helposti
+     toteutettavissa
+   * (+) Ei vaadi mitään uusia dependenssejä
+   * (-) Ei saada mitään hienouksia "ilmaiseksi"
+   * (-) Jos halutaan jossain vaiheessa useita workereita eri koneilla,
+     niin niiden synkronointi pitää toteuttaa käsin
+
+   * Toteutuksena voisi olla esim.
+     * minuutin välein cronissa käynnistettävä prosessi tai
+     * koko ajan päällä oleva Pythonilla kirjoitettu daemon
+   * Mahdollisuus käyttää apuna jotain kirjastoa (esim. (6) tai (7)),
+     mutta vastaava pitäisi olla aika helppo kirjoittaa käsinkin
+
+ * (2) cron
+   * (+) Helposti saatavilla Linuxille
+   * (-) Pitäisi muokata crontabeja Pythonista käsin
+   * (-) Työt olisi luultavasti kuitenkin paras tallentaa crontabien
+     lisäksi myös tietokantaan, jolloin päädytään tekemään lähes sama
+     työ kuin (1) vaihtoehdossa.
+
+ * (3) Celery (http://www.celeryproject.org/)
+   * (+) Mahdollistaa töiden jakamisen monen eri koneen välillä
+   * (+) Aikataulutukset saadaan Celery beat_schedulelta ilmaiseksi
+   * (-) Vaatii jonkin MQ-ratkaisun pohjalle, esim. RabbitMQ tai Redis
+   * (-) Töiden ja aikataulujen hallinta API:n kautta vaatii erityisen
+     serialisaattorin tekemisen
+
+ * (4) Apache Airflow (https://airflow.apache.org/)
+   * (+) Todella monipuolisen oloinen järjestelmä, joka taipuu varmasti
+         monimutkaisempiinkin käyttötapauksiin mitä aluksi vaaditaan
+   * (+) Selkeä ja laaja graafinen käyttöliittymä
+         * Saadaanko kuitenkaan mitään hyötyä tässä yhteydessä?
+   * (-) Vaikuttaa monimutkaiselta näin yksinkertaiseen tarkoitukseen
+   * (-) Paljon opeteltavaa
+   * (-) Töiden ja aikataulujen hallinta API:n kautta vaatii erityisen
+     serialisaattorin tekemisen
+
+ * (5) Django Cron (https://github.com/Tivix/django-cron)
+   * (-) Ei näytä taipuvan dynaamisesti määriteltäviin ajoituksiin
+
+ * (6) schedule Python-kirjasto (https://github.com/dbader/schedule)
+   * Yksinkertainen kirjasto, joka ei näytä tarjoavan juurikaan lisäarvoa.
+   * Saattaa kuitenkin olla hyödyllinen kirjasto vaihtoehdon (1)
+     toteutuksessa
+
+ * (7) APScheduler (https://github.com/agronholm/apscheduler)
+   * (+) Työt voi tallentaa PostgreSQL-kantaan
+   * (-) Töiden ja aikataulujen hallinta API:n kautta vaatii erityisen
+     serialisaattorin tekemisen
+
+ * (8) Jobber (https://github.com/dshearer/jobber)
+
+ * (9) systemd timers (https://www.freedesktop.org/software/systemd/man/systemd.timer.html)
+   * https://unix.stackexchange.com/questions/278564/cron-vs-systemd-timers
+
+ * (10) Chronos (https://mesos.github.io/chronos/)
+   * Vaatii alleen Apache Mesos'n
+
+ * (11) Cronicle (http://cronicle.net/)
+
+ * SaaS:
+   * IronWorker (https://elements.heroku.com/addons/iron_worker)
+   * Cron as a Service (https://www.cronasaservice.com/)
