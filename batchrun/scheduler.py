@@ -1,6 +1,5 @@
 import os
 import time
-from datetime import timedelta
 from typing import NoReturn
 
 from django.db import transaction
@@ -10,19 +9,16 @@ from .models import JobRunQueueItem
 from .job_launching import run_job
 
 POLL_INTERVAL = 10.0  # seconds
-SKIP_PAST_ITEMS_OLDER_THAN = timedelta(minutes=5)
 
 
 def run_scheduler_loop() -> NoReturn:
-    queue_items = JobRunQueueItem.objects.filter(
-        scheduled_job__enabled=True,
-        assigned_at=None).order_by('run_at')
+    # Make sure that the job run queue is up to date
+    JobRunQueueItem.objects.refresh()
+
+    # Get the runnable items ordered by run time
+    queue_items = JobRunQueueItem.objects.to_run().order_by('run_at')
 
     while True:
-        # Remove old queue items
-        oldest_runnable = utc_now() - SKIP_PAST_ITEMS_OLDER_THAN
-        queue_items.filter(run_at__lt=oldest_runnable).delete()
-
         first_item = queue_items.first()
         if not first_item:
             # Nothing in the queue, check again after poll interval
@@ -57,3 +53,4 @@ def run_scheduler_loop() -> NoReturn:
         run_job(first_item.scheduled_job.job)
 
         first_item.scheduled_job.update_run_queue()
+        queue_items.remove_old_items()

@@ -60,6 +60,9 @@ class RecurrenceRule:
     def matches_time(self, t: time) -> bool:
         return (t.hour in self.hours and t.minute in self.minutes)
 
+    def get_next_events(self, start_time: datetime) -> Iterable[AwareDateTime]:
+        return get_next_events(self, start_time)
+
 
 def get_next_events(
         rule: RecurrenceRule,

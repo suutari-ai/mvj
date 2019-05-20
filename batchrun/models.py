@@ -1,6 +1,7 @@
 import shlex
 import sys
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import pytz
 from django.contrib.postgres.fields import JSONField
@@ -11,10 +12,11 @@ from enumfields import EnumField
 from safedelete.models import SafeDeleteModel
 
 from ._times import utc_now
+from .constants import GRACE_PERIOD_LENGTH
 from .enums import CommandType, LogEntryKind
 from .fields import IntegerSetSpecifierField
 from .model_mixins import CleansOnSave, TimeStampedSafeDeleteModel
-from .scheduling import RecurrenceRule, get_next_events
+from .scheduling import RecurrenceRule
 from .utils import get_django_manage_py
 
 
@@ -184,34 +186,38 @@ class ScheduledJob(TimeStampedSafeDeleteModel):
         return ugettext('Scheduled job "{job}" @ {schedule}').format(
             job=self.job, schedule=' '.join(schedule_items))
 
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        super().save(*args, **kwargs)
-        self.update_run_queue()
-
-    def update_run_queue(self) -> None:
-        max_items_to_create = 60
-
-        recurrence_rule = RecurrenceRule.create(
+    @property
+    def recurrence_rule(self) -> RecurrenceRule:
+        return RecurrenceRule.create(
             timezone=self.timezone.name,
             years=self.years,
             months=self.months,
             days_of_month=self.days_of_month,
             weekdays=self.weekdays,
             hours=self.hours,
-            minutes=self.minutes)
+            minutes=self.minutes,
+        )
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        super().save(*args, **kwargs)
+        self.update_run_queue()
+
+    def update_run_queue(self, max_items_to_create: int = 10) -> None:
         items: models.Manager = self.run_queue_items  # type: ignore
+        start_from = utc_now() - GRACE_PERIOD_LENGTH
 
-        # Delete old items
-        items.all().delete()
+        fresh_ids = []
 
         if self.enabled:
-            # Create new items till the time limit
-            events = get_next_events(recurrence_rule, utc_now())
+            events = self.recurrence_rule.get_next_events(start_from)
             for (number, time) in enumerate(events):
                 if number >= max_items_to_create:
                     break
-                items.create(run_at=time, scheduled_job=self)
+                item = items.get_or_create(run_at=time, scheduled_job=self)[0]
+                fresh_ids.append(item.pk)
+
+        # Delete old items
+        items.exclude(pk__in=fresh_ids).delete()
 
 
 class JobRun(models.Model):
@@ -269,6 +275,22 @@ class JobRunLogEntry(models.Model):
             run_name=self.run, kind=self.kind, number=self.number)
 
 
+class JobRunQueueItemQuerySet(models.QuerySet):
+    def to_run(self) -> models.QuerySet:
+        return self.filter(scheduled_job__enabled=True, assigned_at=None)
+
+    def remove_old_items(self, limit: Optional[datetime] = None) -> None:
+        if limit is None:
+            limit = utc_now() - GRACE_PERIOD_LENGTH
+        self.filter(run_at__lt=limit).delete()
+
+    def refresh(self) -> None:
+        self.remove_old_items()
+
+        for scheduled_job in ScheduledJob.objects.all():
+            scheduled_job.update_run_queue()  # type: ignore
+
+
 class JobRunQueueItem(models.Model):
     run_at = models.DateTimeField(
         db_index=True, verbose_name=_('scheduled run time'))
@@ -280,6 +302,8 @@ class JobRunQueueItem(models.Model):
         null=True, blank=True, verbose_name=_('assignment time'))
     assignee_pid = models.IntegerField(
         null=True, blank=True, verbose_name=_('assignee process id (PID)'))
+
+    objects = JobRunQueueItemQuerySet.as_manager()
 
     class Meta:
         ordering = ['run_at']
