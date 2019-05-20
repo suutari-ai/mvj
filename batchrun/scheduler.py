@@ -7,7 +7,7 @@ from django.db import transaction
 
 from ._times import utc_now
 from .models import JobRunQueueItem
-from .runner import run_job
+from .job_launching import run_job
 
 POLL_INTERVAL = 10.0  # seconds
 SKIP_PAST_ITEMS_OLDER_THAN = timedelta(minutes=5)
