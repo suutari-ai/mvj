@@ -51,6 +51,8 @@ class Migration(migrations.Migration):
                          'is passed as an argument to the rent_id '
                          'parameter, then the command will be called '
                          'as "COMMAND --rent-id 123".'))),
+                ('deleted',
+                 models.DateTimeField(editable=False, null=True)),
             ],
             options={
                 'verbose_name': 'command',

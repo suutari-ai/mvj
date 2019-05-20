@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import ugettext, ugettext_lazy as _
 from enumfields import EnumField
+from safedelete.models import SafeDeleteModel
 
 from ._times import utc_now
 from .enums import CommandType, LogEntryKind
@@ -17,7 +18,7 @@ from .scheduling import RecurrenceRule, get_next_events
 from .utils import get_django_manage_py
 
 
-class Command(models.Model):
+class Command(SafeDeleteModel):
     type = EnumField(CommandType, max_length=30)
 
     name = models.CharField(
