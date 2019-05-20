@@ -23,6 +23,7 @@ django-rest-swagger
 docxtpl
 psycopg2-binary
 pysftp
+python-daemon
 python-dateutil
 raven
 requests
