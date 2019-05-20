@@ -1,13 +1,10 @@
-import os
 import shlex
 import sys
-from datetime import timedelta
 from typing import Any, Dict, List
 
 import pytz
-from django.conf import settings
 from django.contrib.postgres.fields import JSONField
-from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import ugettext, ugettext_lazy as _
 from enumfields import EnumField
@@ -17,6 +14,7 @@ from .enums import CommandType, LogEntryKind
 from .fields import IntegerSetSpecifierField
 from .model_mixins import CleansOnSave, TimeStampedSafeDeleteModel
 from .scheduling import RecurrenceRule, get_next_events
+from .utils import get_django_manage_py
 
 
 class Command(models.Model):
@@ -70,26 +68,6 @@ class Command(models.Model):
             for param_template in shlex.split(self.parameter_format_string)
         ]
         return base_command + formatted_args
-
-
-def get_django_manage_py(max_depth: int = 3) -> str:
-    manage_py_path = getattr(settings, 'MANAGE_PY_PATH', None)
-    if manage_py_path:
-        if not isinstance(manage_py_path, str):
-            raise ImproperlyConfigured('MANAGE_PY_PATH should be a string')
-        return manage_py_path
-
-    # Try to auto detect by searching down from dir containing settings
-    settings_mod = sys.modules[settings.SETTINGS_MODULE]  # type: ignore
-    directory = os.path.dirname(settings_mod.__file__)
-    tries_left = max_depth
-    while directory != '/' and tries_left:
-        candidate = os.path.join(directory, 'manage.py')
-        if os.path.exists(candidate):
-            return candidate
-        tries_left -= 1
-        directory = os.path.dirname(directory)
-    raise EnvironmentError('Cannot find manage.py')
 
 
 class Job(TimeStampedSafeDeleteModel):
