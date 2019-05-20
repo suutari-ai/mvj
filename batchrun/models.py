@@ -43,7 +43,12 @@ class Command(models.Model):
         default=dict, blank=True, verbose_name=_('parameters'))
     parameter_format_string = models.CharField(
         max_length=1000, default='', blank=True,
-        verbose_name=_('parameter format string'))
+        verbose_name=_('parameter format string'), help_text=_(
+            'String that defines how the parameters are formatted '
+            'when calling the command. E.g. if this is '
+            '"--rent-id {rent_id}" and value 123 is passed as '
+            'an argument to the rent_id parameter, then the command '
+            'will be called as "COMMAND --rent-id 123".'))
 
     class Meta:
         verbose_name = _('command')
@@ -88,7 +93,11 @@ class Job(TimeStampedSafeDeleteModel):
     command = models.ForeignKey(
         Command, on_delete=models.PROTECT, verbose_name=_('command'))
     arguments = JSONField(
-        default=dict, blank=True, verbose_name=_('arguments'))
+        default=dict, blank=True, verbose_name=_('arguments'), help_text=_(
+            'Argument for the command as a JSON object. These will be '
+            'formatted with the parameter format string of the command. '
+            'E.g. to pass value 123 as an argument to the rent_id '
+            'parameter, set this to {"rent_id": 123}.'))
 
     class Meta:
         verbose_name = _('job')

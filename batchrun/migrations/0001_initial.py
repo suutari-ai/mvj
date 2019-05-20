@@ -43,7 +43,14 @@ class Migration(migrations.Migration):
                      blank=True,
                      default='',
                      max_length=1000,
-                     verbose_name='parameter format string')),
+                     verbose_name='parameter format string',
+                     help_text=(
+                         'String that defines how the parameters are '
+                         'formatted when calling the command. E.g. if '
+                         'this is "--rent-id {rent_id}" and value 123 '
+                         'is passed as an argument to the rent_id '
+                         'parameter, then the command will be called '
+                         'as "COMMAND --rent-id 123".'))),
             ],
             options={
                 'verbose_name': 'command',
@@ -76,7 +83,14 @@ class Migration(migrations.Migration):
                      blank=True, max_length=500, verbose_name='comment')),
                 ('arguments',
                  django.contrib.postgres.fields.jsonb.JSONField(
-                     blank=True, default=dict, verbose_name='arguments')),
+                     blank=True, default=dict, verbose_name='arguments',
+                     help_text=(
+                         'Argument for the command as a JSON object. '
+                         'These will be formatted with the parameter '
+                         'format string of the command. '
+                         'E.g. to pass value 123 as an argument to the '
+                         'rent_id parameter, set this to '
+                         '{"rent_id": 123}.'))),
                 ('command',
                  models.ForeignKey(
                      on_delete=django.db.models.deletion.PROTECT,
