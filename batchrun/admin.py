@@ -1,41 +1,15 @@
-from typing import Optional
-
 from django.contrib import admin
-from django.db.models import Model
-from django.http import HttpRequest
-from django.utils.translation import ugettext_lazy as _
 
+from .admin_utils import PreciseTimeFormatter, ReadOnlyAdmin
 from .models import (
     Command, Job, JobRun, JobRunLogEntry, JobRunQueueItem, ScheduledJob,
     Timezone)
 
 
-class ReadOnlyAdmin(admin.ModelAdmin):
-    def has_add_permission(
-            self,
-            request: HttpRequest,
-            obj: Optional[Model] = None,
-    ) -> bool:
-        return False
-
-    def has_change_permission(
-            self,
-            request: HttpRequest,
-            obj: Optional[Model] = None,
-    ) -> bool:
-        return False
-
-    def has_delete_permission(
-            self,
-            request: HttpRequest,
-            obj: Optional[Model] = None,
-    ) -> bool:
-        return False
-
-
 @admin.register(Command)
 class CommandAdmin(admin.ModelAdmin):
     list_display = ['type', 'name']
+    exclude = ['parameters']
 
 
 @admin.register(Job)
@@ -46,33 +20,20 @@ class JobAdmin(admin.ModelAdmin):
 @admin.register(JobRun)
 class JobRunAdmin(ReadOnlyAdmin):
     date_hierarchy = 'started_at'
-    list_display = [
-        'precise_started_at', 'precise_stopped_at',
-        'job', 'exit_code']
+    list_display = ['started_at_p', 'stopped_at_p', 'job', 'exit_code']
     list_filter = ['exit_code']
 
-    def precise_started_at(self, obj: Model) -> str:
-        return obj.started_at.strftime('%Y-%m-%d %H:%M:%S.%f')  # type: ignore
-    precise_started_at.short_description = _('start time')  # type: ignore
-    precise_started_at.admin_order_field = 'started_at'  # type: ignore
-
-    def precise_stopped_at(self, obj: Model) -> str:
-        return obj.stopped_at.strftime('%Y-%m-%d %H:%M:%S.%f')  # type: ignore
-    precise_stopped_at.short_description = _('start time')  # type: ignore
-    precise_stopped_at.admin_order_field = 'stopped_at'  # type: ignore
+    started_at_p = PreciseTimeFormatter(JobRun, 'started_at')
+    stopped_at_p = PreciseTimeFormatter(JobRun, 'stopped_at')
 
 
 @admin.register(JobRunLogEntry)
 class JobRunLogEntryAdmin(ReadOnlyAdmin):
     date_hierarchy = 'time'
-    list_display = [
-        'precise_time', 'run', 'kind', 'line_number', 'number', 'text']
+    list_display = ['time_p', 'run', 'kind', 'line_number', 'number', 'text']
     list_filter = ['kind']
 
-    def precise_time(self, obj: Model) -> str:
-        return obj.time.strftime('%Y-%m-%d %H:%M:%S.%f')  # type: ignore
-    precise_time.short_description = _('time')  # type: ignore
-    precise_time.admin_order_field = 'time'  # type: ignore
+    time_p = PreciseTimeFormatter(JobRunLogEntry, 'time')
 
 
 @admin.register(JobRunQueueItem)
