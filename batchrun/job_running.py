@@ -68,7 +68,7 @@ class LogWriter:
 
     def write(self, data: bytes) -> int:
         timestamp = utc_now()
-        text = data.decode(self.coding, errors="replace")
+        text = data.decode(self.coding, errors="surrogateescape")#XXX
 
         # Split the text to lines and store each in a separate record
         for line in text.splitlines(keepends=True):

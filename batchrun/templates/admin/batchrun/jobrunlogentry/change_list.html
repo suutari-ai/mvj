@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+
+{% load admin_list %}
+
+{% block pagination %}
+
+{% if 1 %}
+{% pagination cl %}
+{% else %}
+Pagination Skipped
+{% endif %}
+
+{% endblock %}
