@@ -1,7 +1,8 @@
 import shlex
 import sys
+from collections import defaultdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
 
 import pytz
 from django.contrib.postgres.fields import JSONField
@@ -14,7 +15,8 @@ from safedelete import SOFT_DELETE_CASCADE  # type: ignore
 from safedelete.models import SafeDeleteModel
 
 from ._times import utc_now
-from .constants import GRACE_PERIOD_LENGTH
+from .compressor import CombinedLog
+from .constants import GRACE_PERIOD_LENGTH, LINE_END_CHARACTERS
 from .enums import CommandType, LogEntryKind
 from .fields import IntegerSetSpecifierField
 from .model_mixins import CleansOnSave, TimeStampedSafeDeleteModel
@@ -83,7 +85,7 @@ class Command(SafeDeleteModel):
         else:
             raise ValueError("Unknown command type: {}".format(self.type))
         formatted_args = [
-            param_template.format(arguments)
+            param_template.format(**arguments)
             for param_template in shlex.split(self.parameter_format_string)
         ]
         return base_command + formatted_args
@@ -319,8 +321,98 @@ class JobRunLogEntry(SafeDeleteModel):
         verbose_name_plural = _("log entries")
 
     def __str__(self) -> str:
-        return ugettext("{run_name}: {kind} entry {number}").format(
-            run_name=self.run, kind=self.kind, number=self.number
+        return ugettext("{run_name}: {kind} entry {linenum}({number})").format(
+            run_name=self.run,
+            kind=self.kind,
+            linenum=self.line_number,
+            number=self.number,
+        )
+
+
+class JobRunLog(SafeDeleteModel):
+    run = models.ForeignKey(
+        JobRun,
+        on_delete=models.CASCADE,
+        related_name="logs",
+        verbose_name=_("run"),
+    )
+    content = models.TextField(null=False, blank=True, verbose_name=_("text"))
+    entry_data = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name=_("log entry metadata"),
+        help_text=(
+            "Data that defines the location, timestamp and "
+            "kind (stdout or stderr) of each log entry "
+            "within the whole log content."
+        ),
+    )
+    first_timestamp = models.DateTimeField(
+        db_index=True,
+        verbose_name=_("timestamp of the first entry"),
+    )
+    last_timestamp = models.DateTimeField(
+        db_index=True,
+        verbose_name=_("timestamp of the last entry"),
+    )
+    entry_count = models.IntegerField(
+        verbose_name=_("total count of entries"),
+    )
+    error_count = models.IntegerField(
+        verbose_name=_("count of error entries"),
+    )
+
+    @classmethod
+    def get_or_create_for_run(cls, run: JobRun) -> Optional["JobRunLog"]:
+        existing = cls.objects.filter(run=run)
+        if existing:
+            return existing.first()
+
+        log_entries = JobRunLogEntry.objects.filter(run=run)
+        combined_log = CombinedLog.from_log_entries(log_entries)
+
+        if combined_log.entry_count == 0:
+            return existing.first()
+
+        return cls.objects.create(
+            run=run,
+            content=combined_log.content,
+            entry_data=combined_log.entry_data,
+            first_timestamp=combined_log.first_timestamp,
+            last_timestamp=combined_log.last_timestamp,
+            entry_count=combined_log.entry_count,
+            error_count=combined_log.error_count,
+        )
+
+    def __iter__(self) -> Iterable[JobRunLogEntry]:
+        combined_log = self.to_combined_log()
+        line_number_by_kind = defaultdict(lambda: 1)
+        number_within_line_by_kind = defaultdict(lambda: 1)
+        for entry_datum in combined_log.iterate_entries():
+            kind = entry_datum.kind
+            yield JobRunLogEntry(
+                run=self.run,
+                kind=kind,
+                line_number=line_number_by_kind[kind],
+                number=number_within_line_by_kind[kind],
+                time=entry_datum.time,
+                text=entry_datum.text,
+            )
+
+            if entry_datum.text.endswith(LINE_END_CHARACTERS):
+                line_number_by_kind[kind] += 1
+                number_within_line_by_kind[kind] = 1
+            else:
+                number_within_line_by_kind[kind] += 1
+
+    def to_combined_log(self) -> CombinedLog:
+        return CombinedLog(
+            content=self.content,
+            entry_data=self.entry_data,
+            first_timestamp=self.first_timestamp,
+            last_timestamp=self.last_timestamp,
+            entry_count=self.entry_count,
+            error_count=self.error_count,
         )
 
 
